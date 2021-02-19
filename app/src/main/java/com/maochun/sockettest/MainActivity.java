@@ -34,8 +34,10 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+
         mEditTextServerIP = findViewById(R.id.editTextServerIP);
         mEditTextPort = findViewById(R.id.editTextPort);
+        mEditTextSend = findViewById(R.id.editTextSendMessage);
         mTextViewLog = findViewById(R.id.textViewLog);
 
     }
@@ -79,13 +81,28 @@ public class MainActivity extends AppCompatActivity {
     public void onSendButtonClick(View v){
 
         String msg = mEditTextSend.getText().toString();
-        if (mSocketWriter != null && msg.length() > 0){
-            try {
-                mSocketWriter.write(msg);
-            }catch (Exception e){
-                e.printStackTrace();
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                if (mSocketWriter != null && msg.length() > 0){
+                    try {
+                        mSocketWriter.write(msg);
+                        mSocketWriter.flush();
+
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                mTextViewLog.append("Send: " + msg + "\n");
+                            }
+                        });
+
+                    }catch (Exception e){
+                        e.printStackTrace();
+                    }
+                }
             }
-        }
+        }).start();
+
     }
 
     public void connectToServer(String ip, int port){
@@ -96,14 +113,37 @@ public class MainActivity extends AppCompatActivity {
                 try {
                     InetAddress serverAddr = InetAddress.getByName(ip);
 
-                    mClientSocket = new Socket(serverAddr, port);
+                    //mClientSocket = new Socket(serverAddr, port);
+
+                    InetSocketAddress sc_add= new InetSocketAddress(serverAddr,port);
+
+                    mClientSocket.connect(sc_add,5000);
 
                     mSocketWriter = new BufferedWriter(new OutputStreamWriter(mClientSocket.getOutputStream()));
                     mSocketReader = new BufferedReader(new InputStreamReader(mClientSocket.getInputStream()));
 
-                    while(mClientSocket.isConnected()){
-                        String msg = mSocketReader.readLine();
-                        System.out.println("recv:" + msg);
+                    while(true){
+                        if (mClientSocket.isConnected()) {
+                            char[] m = new char[100];
+                            for(int i=0; i<100; i++){
+                                m[i] = '\0';
+                            }
+                            mSocketReader.read(m);
+
+                            //String msg = mSocketReader.readLine();
+                            String msg = new String(m);
+                            System.out.println("recv:" + msg + "\n");
+
+                            runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    mTextViewLog.append("Recv: " + msg + "\n");
+                                }
+                            });
+
+                        }else{
+                            Thread.sleep(100);
+                        }
                     }
 
                 }catch (Exception e){
